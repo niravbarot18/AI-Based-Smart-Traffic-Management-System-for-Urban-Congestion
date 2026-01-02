@@ -1,73 +1,62 @@
-# Welcome to your Lovable project
+# AI-Based Smart Traffic Management System for Urban Congestion 🚦
 
-## Project info
+## 📌 Overview
+The **AI-Based Smart Traffic Management System** is an intelligent, web-based solution designed to analyze real-time traffic conditions and assist authorities in managing urban congestion efficiently. The system leverages computer vision and data-driven analytics to improve traffic flow, reduce delays, and enhance road safety.
 
-**URL**: https://lovable.dev/projects/bbb7a7bd-2985-4559-9438-16cf44afb2e7
+---
 
-## How can I edit this code?
+## 🎯 Problem Statement
+Rapid urbanization has led to increased vehicle density, causing frequent traffic congestion, delays, higher fuel consumption, and safety risks. Traditional traffic systems rely on static signal timings and manual monitoring, which fail to adapt to real-time traffic variations.
 
-There are several ways of editing your application.
+---
 
-**Use Lovable**
+## 💡 Proposed Solution
+This project uses **AI-powered vehicle detection and traffic analysis** to:
+- Monitor real-time traffic conditions
+- Identify congestion levels
+- Provide adaptive signal timing suggestions
+- Support quick and data-driven decision-making for traffic authorities
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/bbb7a7bd-2985-4559-9438-16cf44afb2e7) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🔑 Key Features
+- 🚗 Vehicle detection using computer vision  
+- 🔢 Vehicle counting and traffic density analysis  
+- ⚠️ Congestion level classification (Normal / Moderate / Severe)  
+- 📊 Speed and traffic statistics visualization  
+- 🚦 Adaptive signal timing suggestions  
+- 🖥️ User-friendly dashboard for authorities  
 
-**Use your preferred IDE**
+---
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 🛠️ Technologies Used
+### Backend
+- Python  
+- OpenCV  
+- YOLO (Object Detection)  
+- FastAPI / Flask  
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Frontend
+- React  
+- TypeScript  
+- Tailwind CSS  
 
-Follow these steps:
+### Tools & Platforms
+- Git & GitHub  
+- VS Code  
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+---
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## ⚙️ System Architecture
+1. Traffic video input from cameras  
+2. AI model detects and counts vehicles  
+3. Traffic density and congestion analysis  
+4. Adaptive signal suggestions generated  
+5. Data visualized on the web dashboard  
 
-# Step 3: Install the necessary dependencies.
-npm i
+---
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/bbb7a7bd-2985-4559-9438-16cf44afb2e7) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## ▶️ How to Run the Project
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/niravbarot18/AI-Based-Smart-Traffic-Management-System-for-Urban-Congestion.git
