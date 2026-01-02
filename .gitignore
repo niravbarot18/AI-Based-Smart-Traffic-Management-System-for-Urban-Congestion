@@ -1,24 +1,24 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# Node / Frontend
+node_modules/
+dist/
 
-node_modules
-dist
-dist-ssr
-*.local
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# ML models & large files
+*.pt
+*.h5
+*.pth
+models/
+
+# Test data
+test_videos/
+
+# OS / Editor
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
+Thumbs.db
+.vscode/
+.idea/
