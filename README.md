@@ -60,3 +60,15 @@ This project uses **AI-powered vehicle detection and traffic analysis** to:
 1. Clone the repository:
    ```bash
    git clone https://github.com/niravbarot18/AI-Based-Smart-Traffic-Management-System-for-Urban-Congestion.git
+
+2. cd AI-Based-Smart-Traffic-Management-System-for-Urban-Congestion
+
+3. pip install -r requirements.txt
+
+4. python app.py
+
+5. npm install
+npm run dev
+
+
+
