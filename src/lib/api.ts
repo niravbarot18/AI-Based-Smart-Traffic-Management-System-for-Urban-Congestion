@@ -35,6 +35,18 @@ export interface DetectionStats {
   }>;
 }
 
+export interface Alert {
+  id: string;
+  title: string;
+  message: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  impact: string;
+  action: string;
+  status: 'ACTIVE' | 'RESOLVED';
+  timestamp: number;
+  formatted_time: string;
+}
+
 export interface DetectionResponse {
   success: boolean;
   data: DetectionStats;
@@ -42,6 +54,7 @@ export interface DetectionResponse {
 }
 
 class DetectionAPI {
+
   private baseUrl: string;
 
   constructor() {
@@ -152,10 +165,10 @@ class DetectionAPI {
       }
       return response.json();
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Network error', 
-        data: this.getEmptyStats() 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error',
+        data: this.getEmptyStats()
       };
     }
   }
@@ -169,55 +182,59 @@ class DetectionAPI {
       return response.json();
     } catch (error) {
       if ((error as any)?.name === 'AbortError') return { success: false, error: 'aborted' };
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: error instanceof Error ? error.message : 'Network error'
       };
     }
   }
 
-  async setCountingLine(start: [number, number], end: [number, number]): Promise<{ success: boolean; message?: string; error?: string }> {
+  async resetAnalytics(): Promise<{ success: boolean; message?: string; error?: string }> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/counting/line`, {
+      const response = await fetch(`${this.baseUrl}/api/analytics/reset`, {
+        method: 'POST',
+      });
+      return response.json();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      };
+    }
+  }
+
+  async getRoiConfig(cameraId: string): Promise<{ success: boolean; data?: { camera_id: string; rois: Record<string, number[][]> }; error?: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/roi-config?camera_id=${encodeURIComponent(cameraId)}`);
+      if (!response.ok) {
+        return { success: false, error: 'Failed to fetch ROI config' };
+      }
+      return response.json();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      };
+    }
+  }
+
+  async setRoiConfig(cameraId: string, rois: Record<string, number[][]>): Promise<{ success: boolean; data?: any; message?: string; error?: string }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/roi-config`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ start, end }),
+        body: JSON.stringify({ camera_id: cameraId, rois }),
       });
-      return response.json();
-    } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Network error'
-      };
-    }
-  }
-
-  async getCountingLine(): Promise<{ success: boolean; line?: [[number, number], [number, number]]; error?: string }> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/counting/line`);
       if (!response.ok) {
-        return { success: false, error: 'Failed to fetch counting line' };
+        const error = await response.json().catch(() => ({ error: 'Failed to save ROI config' }));
+        return { success: false, error: error.error || 'Failed to save ROI config' };
       }
       return response.json();
     } catch (error) {
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Network error'
-      };
-    }
-  }
-
-  async resetCount(): Promise<{ success: boolean; message?: string; error?: string }> {
-    try {
-      const response = await fetch(`${this.baseUrl}/api/counting/reset`, {
-        method: 'POST',
-      });
-      return response.json();
-    } catch (error) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: error instanceof Error ? error.message : 'Network error'
       };
     }
@@ -243,8 +260,8 @@ class DetectionAPI {
       });
       return response.json();
     } catch (error) {
-      return { 
-        success: false, 
+      return {
+        success: false,
         error: error instanceof Error ? error.message : 'Network error'
       };
     }
@@ -309,6 +326,195 @@ class DetectionAPI {
     }
   }
 
+  async getMinuteVehicleCount(): Promise<{
+    success: boolean;
+    data?: Record<string, number>; // e.g., {"14:01": 5, "14:02": 8, "14:03": 6}
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/minute-vehicle-count`);
+      if (!response.ok) {
+        return { success: false, error: 'Failed to fetch minute vehicle count' };
+      }
+      return response.json();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      };
+    }
+  }
+
+  async getRoadType(): Promise<{
+    success: boolean;
+    data?: {
+      type: string;
+      configured: boolean;
+      last_updated: string | null;
+      description: string;
+    };
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/road-type`);
+      if (!response.ok) {
+        return { success: false, error: 'Failed to fetch road type data' };
+      }
+      return response.json();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      };
+    }
+  }
+
+  async getWeather(): Promise<{
+    success: boolean;
+    data?: {
+      condition: string;
+      visibility: string;
+      time_of_day: string;
+      confidence: number;
+      last_updated: string | null;
+    };
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/weather`);
+      if (!response.ok) {
+        return { success: false, error: 'Failed to fetch weather data' };
+      }
+      return response.json();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      };
+    }
+  }
+
+  async getEmergencyStatus(): Promise<{
+    success: boolean;
+    data?: {
+      emergency: boolean;
+      priority_direction: string | null;
+      road_mode: string;
+      signal_states: Record<string, string>;
+      ambulance_detected: boolean;
+    };
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/emergency-status`);
+      if (!response.ok) {
+        return { success: false, error: 'Failed to fetch emergency status' };
+      }
+      return response.json();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      };
+    }
+  }
+
+  async getAlerts(): Promise<{
+    success: boolean;
+    data?: Alert[];
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/alerts`);
+      if (!response.ok) {
+        return { success: false, error: 'Failed to fetch alerts' };
+      }
+      return response.json();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      };
+    }
+  }
+
+  async getMetrics(): Promise<{
+    success: boolean;
+    data?: {
+      efficiency_improvement: number;
+      average_wait_time: number | null;
+      vehicle_throughput_last_min: number;
+    };
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/metrics`);
+      if (!response.ok) {
+        return { success: false, error: 'Failed to fetch metrics' };
+      }
+      return response.json();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      };
+    }
+  }
+
+  async getRoadConfig(): Promise<{
+    success: boolean;
+    data?: {
+      road_mode: string;
+      allowed_directions: string[];
+      configured: boolean;
+      last_updated: string | null;
+    };
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/road-config`);
+      if (!response.ok) {
+        return { success: false, error: 'Failed to fetch road config' };
+      }
+      return response.json();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      };
+    }
+  }
+
+  async setRoadConfig(roadMode: string, allowedDirections: string[]): Promise<{
+    success: boolean;
+    data?: any;
+    message?: string;
+    error?: string;
+  }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/road-config`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          road_mode: roadMode,
+          allowed_directions: allowedDirections
+        }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        return { success: false, error: error.error || 'Failed to set road config' };
+      }
+      return response.json();
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error'
+      };
+    }
+  }
+
 
   private getEmptyStats(): DetectionStats {
     return {
@@ -326,4 +532,3 @@ class DetectionAPI {
 }
 
 export const detectionAPI = new DetectionAPI();
-

@@ -20,7 +20,7 @@ const VehicleDetection = () => {
     buses: 0,
     bikes: 0,
     confidence: 0,
-    vehicleCount: 0,  // Vehicles that crossed the line
+    vehicleCount: 0,  // Unique vehicles detected (ID-based)
     countsByType: { cars: 0, trucks: 0, buses: 0, bikes: 0 },
     speedStats: {
       averageSpeed: 0,
@@ -72,10 +72,17 @@ const VehicleDetection = () => {
     last_updated: string;
   } | null>(null);
 
-  // Counting line management
-  const [countingLine, setCountingLine] = useState<{start: [number, number], end: [number, number]} | null>(null);
-  const [isAdjustingLine, setIsAdjustingLine] = useState(false);
-  const [lineAdjustmentMode, setLineAdjustmentMode] = useState<'start' | 'end' | null>(null);
+  // ROI configuration
+  const [roiConfig, setRoiConfig] = useState<Record<string, number[][]>>({
+    NORTH: [],
+    SOUTH: [],
+    EAST: [],
+    WEST: []
+  });
+  const [roiEditLane, setRoiEditLane] = useState<'NORTH' | 'SOUTH' | 'EAST' | 'WEST'>('NORTH');
+  const [isEditingRoi, setIsEditingRoi] = useState(false);
+  const [cameraId, setCameraId] = useState('default');
+  const videoImgRef = useRef<HTMLImageElement>(null);
   const seekInFlightRef = useRef<boolean>(false);
   const pendingSeekRef = useRef<{ offsetOrTarget: number; isTarget: boolean } | null>(null);
 
@@ -104,28 +111,28 @@ const VehicleDetection = () => {
       try {
         const response = await detectionAPI.getStats();
         if (response.success && response.data) {
-            const speedStats = response.data.speed_stats;
-            setDetectionData(prev => ({
-              totalVehicles: response.data.total || 0,
-              cars: response.data.cars || 0,
-              trucks: response.data.trucks || 0,
-              buses: response.data.buses || 0,
-              bikes: response.data.bikes || 0,
-              confidence: response.data.confidence || 0,
-              vehicleCount: response.data.vehicle_count || 0,
-              countsByType: response.data.counts_by_type || { cars: 0, trucks: 0, buses: 0, bikes: 0 },
-              speedStats: speedStats ? {
-                averageSpeed: speedStats.average_speed || 0,
-                maxSpeed: speedStats.max_speed || 0,
-                minSpeed: speedStats.min_speed || 0,
-                speedingCount: speedStats.speeding_count || 0,
-                speedByType: speedStats.speed_by_type || { cars: 0, trucks: 0, buses: 0, bikes: 0 }
-              } : prev.speedStats,
-              speedLimit: prev.speedLimit || 60,
-              illegalParking: prev.illegalParking, // Keep existing
-              streetVendors: prev.streetVendors // Keep existing
-            }));
-          
+          const speedStats = response.data.speed_stats;
+          setDetectionData(prev => ({
+            totalVehicles: response.data.total || 0,
+            cars: response.data.cars || 0,
+            trucks: response.data.trucks || 0,
+            buses: response.data.buses || 0,
+            bikes: response.data.bikes || 0,
+            confidence: response.data.confidence || 0,
+            vehicleCount: response.data.vehicle_count || 0,
+            countsByType: response.data.counts_by_type || { cars: 0, trucks: 0, buses: 0, bikes: 0 },
+            speedStats: speedStats ? {
+              averageSpeed: speedStats.average_speed || 0,
+              maxSpeed: speedStats.max_speed || 0,
+              minSpeed: speedStats.min_speed || 0,
+              speedingCount: speedStats.speeding_count || 0,
+              speedByType: speedStats.speed_by_type || { cars: 0, trucks: 0, buses: 0, bikes: 0 }
+            } : prev.speedStats,
+            speedLimit: prev.speedLimit || 60,
+            illegalParking: prev.illegalParking, // Keep existing
+            streetVendors: prev.streetVendors // Keep existing
+          }));
+
           // Update recent detections
           if (response.data.recent_detections) {
             setRecentDetections(
@@ -235,28 +242,23 @@ const VehicleDetection = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch counting line when detection starts
+  // Fetch ROI config when detection starts
   useEffect(() => {
-    const fetchCountingLine = async () => {
+    const fetchRoiConfig = async () => {
       try {
-        const result = await detectionAPI.getCountingLine();
-        if (result.success && result.line) {
-          setCountingLine({
-            start: result.line[0],
-            end: result.line[1]
-          });
+        const result = await detectionAPI.getRoiConfig(cameraId || 'default');
+        if (result.success && result.data?.rois) {
+          setRoiConfig(result.data.rois);
         }
       } catch (error) {
-        console.error('Failed to fetch counting line:', error);
+        console.error('Failed to fetch ROI config:', error);
       }
     };
 
     if (isDetecting) {
-      fetchCountingLine();
-    } else {
-      setCountingLine(null);
+      fetchRoiConfig();
     }
-  }, [isDetecting]);
+  }, [isDetecting, cameraId]);
 
   const handleStartDetection = async () => {
     // reset paused state before starting
@@ -272,13 +274,15 @@ const VehicleDetection = () => {
 
     // Allow numeric camera indexes (webcam) — send as number if applicable
     const sourceToSend: string | number = !isNaN(Number(videoSource)) && videoSource.trim() !== "" ? Number(videoSource) : videoSource;
+    const nextCameraId = typeof sourceToSend === 'number' ? `camera_${sourceToSend}` : String(sourceToSend);
 
     setIsLoading(true);
     try {
       const response = await detectionAPI.startDetection(sourceToSend);
-      
+
       if (response.success) {
         setIsDetecting(true);
+        setCameraId(nextCameraId);
         toast({
           title: "Detection Started",
           description: "Real-time vehicle detection is now active",
@@ -490,7 +494,7 @@ const VehicleDetection = () => {
           }
 
           // If still no fresh frame, warn but do not block UI for long
-          toast({ title: 'Warning', description: `Seek may be slow (took ~${Math.round(elapsed/1000)}s).`, variant: 'destructive' });
+          toast({ title: 'Warning', description: `Seek may be slow (took ~${Math.round(elapsed / 1000)}s).`, variant: 'destructive' });
         } else {
           toast({ title: 'Seeked', description: `Position: ${r.position}` });
         }
@@ -581,7 +585,7 @@ const VehicleDetection = () => {
           illegalParking: prev.illegalParking,
           streetVendors: prev.streetVendors
         }));
-        
+
         if (response.data.recent_detections) {
           setRecentDetections(
             response.data.recent_detections.map((det: any) => ({
@@ -593,7 +597,7 @@ const VehicleDetection = () => {
             }))
           );
         }
-        
+
         toast({
           title: "Image Processed",
           description: `Detected ${response.data.total} vehicles`,
@@ -619,68 +623,40 @@ const VehicleDetection = () => {
     }
   };
 
-  const handleVideoClick = async (event: React.MouseEvent<HTMLImageElement>) => {
-    if (!isAdjustingLine || !lineAdjustmentMode) return;
+  const handleVideoClick = (event: React.MouseEvent<HTMLImageElement>) => {
+    if (!isEditingRoi) return;
 
     const img = event.currentTarget;
     const rect = img.getBoundingClientRect();
 
-    // Calculate click position relative to the image
-    const x = Math.round(event.clientX - rect.left);
-    const y = Math.round(event.clientY - rect.top);
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
 
-    // Convert to actual image coordinates (accounting for object-fit: contain)
     const imgAspectRatio = img.naturalWidth / img.naturalHeight;
     const containerAspectRatio = rect.width / rect.height;
 
     let scaleX, scaleY, offsetX = 0, offsetY = 0;
 
     if (imgAspectRatio > containerAspectRatio) {
-      // Image is wider than container (letterboxing on top/bottom)
       scaleX = rect.width / img.naturalWidth;
       scaleY = scaleX;
       offsetY = (rect.height - img.naturalHeight * scaleX) / 2;
     } else {
-      // Image is taller than container (letterboxing on sides)
       scaleY = rect.height / img.naturalHeight;
       scaleX = scaleY;
       offsetX = (rect.width - img.naturalWidth * scaleY) / 2;
     }
 
-    // Adjust click coordinates for letterboxing
     const adjustedX = Math.max(0, Math.min(img.naturalWidth, (x - offsetX) / scaleX));
     const adjustedY = Math.max(0, Math.min(img.naturalHeight, (y - offsetY) / scaleY));
 
-    const clickPoint: [number, number] = [Math.round(adjustedX), Math.round(adjustedY)];
+    const normX = Math.max(0, Math.min(1, adjustedX / img.naturalWidth));
+    const normY = Math.max(0, Math.min(1, adjustedY / img.naturalHeight));
 
-    try {
-      if (lineAdjustmentMode === 'start') {
-        // Set start point, keep existing end point
-        const endPoint = countingLine?.end || [Math.round(img.naturalWidth * 0.8), Math.round(img.naturalHeight * 0.5)];
-        const response = await detectionAPI.setCountingLine(clickPoint, endPoint);
-        if (response.success) {
-          setCountingLine({ start: clickPoint, end: endPoint });
-          toast({ title: "Start Point Set", description: `Position: (${clickPoint[0]}, ${clickPoint[1]})` });
-        }
-      } else if (lineAdjustmentMode === 'end') {
-        // Set end point, keep existing start point
-        const startPoint = countingLine?.start || [Math.round(img.naturalWidth * 0.2), Math.round(img.naturalHeight * 0.5)];
-        const response = await detectionAPI.setCountingLine(startPoint, clickPoint);
-        if (response.success) {
-          setCountingLine({ start: startPoint, end: clickPoint });
-          toast({ title: "End Point Set", description: `Position: (${clickPoint[0]}, ${clickPoint[1]})` });
-        }
-      }
-
-      // Auto-switch to the other mode for convenience
-      setLineAdjustmentMode(lineAdjustmentMode === 'start' ? 'end' : 'start');
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update counting line",
-        variant: "destructive",
-      });
-    }
+    setRoiConfig(prev => ({
+      ...prev,
+      [roiEditLane]: [...(prev[roiEditLane] || []), [Number(normX.toFixed(4)), Number(normY.toFixed(4))]]
+    }));
   };
 
   const getVehicleIcon = (type: string) => {
@@ -707,8 +683,8 @@ const VehicleDetection = () => {
             <Camera className="h-5 w-5 mr-2 text-primary" />
             Vehicle Detection
           </CardTitle>
-          <Badge 
-            variant="secondary" 
+          <Badge
+            variant="secondary"
             className={isDetecting ? "bg-success text-success-foreground" : "bg-muted text-muted-foreground"}
           >
             {isDetecting ? "Active" : isConnected ? "Ready" : "Offline"}
@@ -738,8 +714,8 @@ const VehicleDetection = () => {
               Upload Image
             </Button>
             {!isDetecting ? (
-              <Button 
-                onClick={handleStartDetection} 
+              <Button
+                onClick={handleStartDetection}
                 disabled={isLoading || !isConnected}
                 size="sm"
               >
@@ -751,8 +727,8 @@ const VehicleDetection = () => {
                 Start
               </Button>
             ) : (
-              <Button 
-                onClick={handleStopDetection} 
+              <Button
+                onClick={handleStopDetection}
                 disabled={isLoading}
                 variant="destructive"
                 size="sm"
@@ -824,9 +800,10 @@ const VehicleDetection = () => {
 
               {currentFrame ? (
                 <img
+                  ref={videoImgRef}
                   src={currentFrame}
                   alt="Live detection feed"
-                  className={`w-full h-full object-contain ${isAdjustingLine ? 'cursor-crosshair' : ''}`}
+                  className={`w-full h-full object-contain ${isEditingRoi ? 'cursor-crosshair' : ''}`}
                   onClick={handleVideoClick}
                 />
               ) : (
@@ -924,90 +901,97 @@ const VehicleDetection = () => {
           </p>
         </div>
 
-        {/* Counting Line Management */}
-        {isDetecting && countingLine && (
+        {/* ROI Configuration */}
+        {isDetecting && (
           <div className="bg-primary/10 border border-primary/20 rounded-lg p-4 space-y-3">
             <h4 className="text-sm font-medium flex items-center">
               <Gauge className="h-4 w-4 mr-2 text-primary" />
-              Counting Line Configuration
+              ROI Configuration
             </h4>
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <div className="text-muted-foreground mb-1">Start Point</div>
-                <div className="font-mono bg-secondary/30 px-2 py-1 rounded">
-                  ({countingLine.start[0]}, {countingLine.start[1]})
-                </div>
-              </div>
-              <div>
-                <div className="text-muted-foreground mb-1">End Point</div>
-                <div className="font-mono bg-secondary/30 px-2 py-1 rounded">
-                  ({countingLine.end[0]}, {countingLine.end[1]})
-                </div>
-              </div>
+            <p className="text-xs text-muted-foreground">
+              Select a lane, then click on the video to add polygon points (normalized). Minimum 4 points per lane.
+            </p>
+            <div className="grid grid-cols-4 gap-2 text-xs">
+              {(['NORTH', 'SOUTH', 'EAST', 'WEST'] as const).map(lane => (
+                <Button
+                  key={lane}
+                  onClick={() => setRoiEditLane(lane)}
+                  variant={roiEditLane === lane ? "default" : "outline"}
+                  size="sm"
+                >
+                  {lane} ({(roiConfig[lane] || []).length})
+                </Button>
+              ))}
             </div>
             <div className="flex gap-2">
               <Button
-                onClick={() => setIsAdjustingLine(!isAdjustingLine)}
-                variant={isAdjustingLine ? "default" : "outline"}
+                onClick={() => setIsEditingRoi(!isEditingRoi)}
+                variant={isEditingRoi ? "default" : "outline"}
                 size="sm"
                 className="flex-1"
               >
-                {isAdjustingLine ? "Cancel Adjustment" : "Adjust Line"}
+                {isEditingRoi ? "Stop Editing" : "Edit ROI"}
+              </Button>
+              <Button
+                onClick={() => setRoiConfig(prev => ({ ...prev, [roiEditLane]: [] }))}
+                variant="outline"
+                size="sm"
+              >
+                Clear Lane
+              </Button>
+              <Button
+                onClick={() => setRoiConfig({ NORTH: [], SOUTH: [], EAST: [], WEST: [] })}
+                variant="outline"
+                size="sm"
+              >
+                Clear All
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={async () => {
+                  const response = await detectionAPI.setRoiConfig(cameraId || 'default', roiConfig);
+                  if (response.success) {
+                    toast({ title: "ROI Saved", description: "ROI configuration saved for this camera." });
+                  } else {
+                    toast({ title: "Error", description: response.error || "Failed to save ROI", variant: "destructive" });
+                  }
+                }}
+                size="sm"
+                className="flex-1"
+              >
+                Save ROI
               </Button>
               <Button
                 onClick={async () => {
-                  const response = await detectionAPI.resetCount();
-                  if (response.success) {
-                    toast({ title: "Count Reset", description: "Vehicle count has been reset" });
+                  const response = await detectionAPI.getRoiConfig(cameraId || 'default');
+                  if (response.success && response.data?.rois) {
+                    setRoiConfig(response.data.rois);
+                    toast({ title: "ROI Loaded", description: "ROI configuration reloaded." });
                   }
                 }}
                 variant="outline"
                 size="sm"
               >
-                Reset Count
+                Reload
               </Button>
             </div>
-            {isAdjustingLine && (
-              <div className="bg-secondary/20 rounded-lg p-3 space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  Click on the video to set the counting line position. First click sets start point, second click sets end point.
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => setLineAdjustmentMode('start')}
-                    variant={lineAdjustmentMode === 'start' ? "default" : "outline"}
-                    size="sm"
-                    className="flex-1"
-                  >
-                    Set Start
-                  </Button>
-                  <Button
-                    onClick={() => setLineAdjustmentMode('end')}
-                    variant={lineAdjustmentMode === 'end' ? "default" : "outline"}
-                    size="sm"
-                    className="flex-1"
-                  >
-                    Set End
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
-        {/* Vehicle Count (Line Crossing) */}
+        {/* Vehicle Analytics (ID-based) */}
         <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-sm font-medium flex items-center">
               <Activity className="h-4 w-4 mr-2 text-primary" />
-              Total Vehicles Counted (Line Crossing)
+              Total Vehicles Detected
             </h4>
             {!isDetecting && (
               <Button
                 onClick={async () => {
-                  const response = await detectionAPI.resetCount();
+                  const response = await detectionAPI.resetAnalytics();
                   if (response.success) {
-                    toast({ title: "Count Reset", description: "Vehicle count has been reset" });
+                    toast({ title: "Analytics Reset", description: "Vehicle analytics have been reset" });
                   }
                 }}
                 variant="outline"
@@ -1019,7 +1003,7 @@ const VehicleDetection = () => {
           </div>
           <div className="text-3xl font-bold text-primary mb-2">{detectionData.vehicleCount}</div>
           <p className="text-xs text-muted-foreground mb-3">
-            Cumulative count of vehicles that crossed the counting line
+            Cumulative count of unique vehicles detected (ID-based)
           </p>
           <div className="grid grid-cols-4 gap-2 text-xs">
             <div className="text-center">
@@ -1115,8 +1099,8 @@ const VehicleDetection = () => {
                   variant="secondary"
                   className={
                     trafficData.traffic_density === 'HIGH' ? 'bg-destructive/20 text-destructive border-destructive/30 text-sm px-3 py-1' :
-                    trafficData.traffic_density === 'MEDIUM' ? 'bg-warning/20 text-warning border-warning/30 text-sm px-3 py-1' :
-                    'bg-success/20 text-success border-success/30 text-sm px-3 py-1'
+                      trafficData.traffic_density === 'MEDIUM' ? 'bg-warning/20 text-warning border-warning/30 text-sm px-3 py-1' :
+                        'bg-success/20 text-success border-success/30 text-sm px-3 py-1'
                   }
                 >
                   {trafficData.traffic_density}
@@ -1128,8 +1112,8 @@ const VehicleDetection = () => {
                   variant="secondary"
                   className={
                     trafficData.congestion_level === 'SEVERE' ? 'bg-destructive/20 text-destructive border-destructive/30 text-sm px-3 py-1' :
-                    trafficData.congestion_level === 'MODERATE' ? 'bg-warning/20 text-warning border-warning/30 text-sm px-3 py-1' :
-                    'bg-success/20 text-success border-success/30 text-sm px-3 py-1'
+                      trafficData.congestion_level === 'MODERATE' ? 'bg-warning/20 text-warning border-warning/30 text-sm px-3 py-1' :
+                        'bg-success/20 text-success border-success/30 text-sm px-3 py-1'
                   }
                 >
                   {trafficData.congestion_level}
@@ -1150,29 +1134,14 @@ const VehicleDetection = () => {
               {detectionData.confidence.toFixed(1)}%
             </span>
           </div>
-          <Progress 
-            value={detectionData.confidence} 
-            className="h-2" 
+          <Progress
+            value={detectionData.confidence}
+            className="h-2"
           />
         </div>
 
         {/* Violations */}
-        <div className="space-y-3">
-          <h4 className="text-sm font-medium flex items-center">
-            <AlertTriangle className="h-4 w-4 mr-2 text-destructive" />
-            Active Violations
-          </h4>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
-              <div className="text-lg font-bold text-destructive">{detectionData.illegalParking}</div>
-              <div className="text-xs text-muted-foreground">Illegal Parking</div>
-            </div>
-            <div className="bg-warning/10 border border-warning/20 rounded-lg p-3">
-              <div className="text-lg font-bold text-warning">{detectionData.streetVendors}</div>
-              <div className="text-xs text-muted-foreground">Street Vendors</div>
-            </div>
-          </div>
-        </div>
+        {/* Violations removed as per request */}
 
         {/* Recent Detections */}
         <div className="space-y-3">
